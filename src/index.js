@@ -11,32 +11,57 @@ export default {
             callback: () => readability(),
         });
 
-        myEventHandler = function (e) {
-            if (e.key.toLowerCase() === 'r' && e.ctrlKey && e.shiftKey) {
-                e.preventDefault();
-                selectionReadability();
-            }
-        }
-        window.addEventListener('keydown', myEventHandler, false);
+        window.roamAlphaAPI.ui.msContextMenu.addCommand({
+            label: "Selection Readability metrics",
+            callback: (e) => selectionReadability(e, true),
+        });
+        window.roamAlphaAPI.ui.blockContextMenu.addCommand({
+            label: "Selection Readability metrics",
+            callback: (e) => selectionReadability(e, false),
+        });
     },
     onunload: () => {
-        window.roamAlphaAPI.ui.commandPalette.removeCommand({
-            label: 'Page Readability metrics'
+        window.roamAlphaAPI.ui.msContextMenu.removeCommand({
+            label: 'Selection Readability metrics'
         });
-        window.removeEventListener('keydown', myEventHandler, false);
+        window.roamAlphaAPI.ui.blockContextMenu.removeCommand({
+            label: "Selection Readability metrics",
+        });
     }
 }
 
 // get selection text
-function selectionReadability() {
+async function selectionReadability(e, msMode) {
+    console.info("getting selection");
     var selectedText = '';
-    if (window.getSelection) {
-        selectedText = window.getSelection();
-    } else if (document.getSelection) {
-        selectedText = document.getSelection();
-    } else if (document.selection) {
-        selectedText = document.selection.createRange().text;
-    } else return;
+    let uids = await roamAlphaAPI.ui.individualMultiselect.getSelectedUids();
+    if (e) {
+        if (msMode == true) {
+            if (e.hasOwnProperty("blocks") && e.blocks.length > 0) { // multi-select mode
+                for (var i = 0; i < e.blocks.length; i++) {
+                    var results = await window.roamAlphaAPI.data.pull("[:block/string]", [":block/uid", e.blocks[i]["block-uid"]]);
+                    selectedText += results[":block/string"].toString().trim() + " ";
+                }
+            }
+        } else {
+            if (uids.length == 0) { // one block only
+                selectedText += e["block-string"].toString().trim();
+            } else {
+                for (var i = 0; i < uids.length; i++) {
+                    var results = await window.roamAlphaAPI.data.pull("[:block/string]", [":block/uid", uids[i]]);
+                    selectedText += results[":block/string"].toString().trim() + " ";
+                }
+            }
+        }
+    } else {
+        if (window.getSelection) {
+            selectedText = window.getSelection();
+        } else if (document.getSelection) {
+            selectedText = document.getSelection();
+        } else if (document.selection) {
+            selectedText = document.selection.createRange().text;
+        } else return;
+    }
     var words = selectedText.toString();
     if (words.length > 1) {
         getReadability(words);
